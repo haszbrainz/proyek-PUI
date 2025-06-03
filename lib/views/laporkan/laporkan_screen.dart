@@ -1,3 +1,4 @@
+import 'dart:convert'; // Untuk jsonEncode dan jsonDecode
 import 'dart:io'; // Untuk File
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -5,6 +6,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:http/http.dart' as http; // Impor paket http
+import 'package:shared_preferences/shared_preferences.dart'; // Impor SharedPreferences
 import 'package:pui/themes/custom_colors.dart'; // Sesuaikan path
 import 'package:pui/themes/custom_text_styles.dart'; // Sesuaikan path
 import 'package:pui/widgets/navigation/bar.dart'; // Sesuaikan path
@@ -22,15 +25,15 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
   String _currentAddress = "Memuat alamat...";
   String _currentCoordinates = "Ketuk ikon lokasi";
 
-  final LatLng _initialCenter = const LatLng(-7.7956, 110.3695);
-  double _initialZoom = 13.0;
+  final LatLng _initialCenter = const LatLng(-2.548926, 118.0148634);
+  double _initialZoom = 5.0;
 
   static const int laporkanTabIndex = 2;
   final double _fabBottomPadding = 20.0;
 
   final ImagePicker _picker = ImagePicker();
-  // Controller untuk TextField Deskripsi di BottomSheet
   late TextEditingController _descriptionController;
+  bool _isSendingReport = false; // State untuk loading di dalam bottom sheet
 
   @override
   void initState() {
@@ -41,15 +44,13 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
 
   @override
   void dispose() {
-    _descriptionController.dispose(); // Jangan lupa dispose controller
-    _mapController.dispose(); // Dispose map controller jika perlu
+    _descriptionController.dispose();
+    // _mapController.dispose(); // MapController tidak selalu perlu di-dispose manual kecuali ada listener
     super.dispose();
   }
 
-  // ... (method _setDefaultLocation, _getCurrentLocationAndPin, _getAddressFromLatLng, _onMapTap tetap sama seperti sebelumnya, pastikan ada 'if (mounted)' ) ...
   Future<void> _setDefaultLocation() async {
     if (!mounted) return;
-    // Try to get current location first
     bool serviceEnabled;
     LocationPermission permission;
 
@@ -58,32 +59,36 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
       if (!mounted) return;
       setState(() {
         _currentPosition = _initialCenter;
-        _currentCoordinates = "Layanan Lokasi Nonaktif. (${_initialCenter.latitude.toStringAsFixed(3)}, ${_initialCenter.longitude.toStringAsFixed(3)})";
+        _currentCoordinates =
+            "Layanan Lokasi Nonaktif. (${_initialCenter.latitude.toStringAsFixed(3)}, ${_initialCenter.longitude.toStringAsFixed(3)})";
         _currentAddress = "Aktifkan layanan lokasi untuk akurasi.";
       });
-       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if(mounted) _mapController.move(_initialCenter, _initialZoom);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _mapController.move(_initialCenter, _initialZoom);
       });
       return;
     }
 
     permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
       permission = await Geolocator.requestPermission();
-       if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-          if (!mounted) return;
-          setState(() {
-            _currentPosition = _initialCenter;
-            _currentCoordinates = "Izin Lokasi Ditolak. (${_initialCenter.latitude.toStringAsFixed(3)}, ${_initialCenter.longitude.toStringAsFixed(3)})";
-            _currentAddress = "Berikan izin lokasi untuk fungsionalitas penuh.";
-          });
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if(mounted) _mapController.move(_initialCenter, _initialZoom);
-          });
-          return;
-       }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() {
+          _currentPosition = _initialCenter;
+          _currentCoordinates =
+              "Izin Lokasi Ditolak. (${_initialCenter.latitude.toStringAsFixed(3)}, ${_initialCenter.longitude.toStringAsFixed(3)})";
+          _currentAddress = "Berikan izin lokasi untuk fungsionalitas penuh.";
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _mapController.move(_initialCenter, _initialZoom);
+        });
+        return;
+      }
     }
-    
+
     try {
       Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.medium);
@@ -94,32 +99,38 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
         _currentCoordinates =
             "${newPosition.latitude.toStringAsFixed(5)}, ${newPosition.longitude.toStringAsFixed(5)}";
       });
-      _getAddressFromLatLng(newPosition);
+      _getAddressFromLatLng(
+          newPosition); // Dapatkan alamat setelah posisi didapat
       WidgetsBinding.instance.addPostFrameCallback((_) {
-         if(mounted) _mapController.move(newPosition, 15.0);
+        // Pindahkan peta setelah state diupdate
+        if (mounted) _mapController.move(newPosition, 15.0);
       });
     } catch (e) {
       print('Error mendapatkan lokasi awal: $e');
       if (!mounted) return;
       setState(() {
-         _currentPosition = _initialCenter;
-        _currentCoordinates = "Gagal dapat lokasi. (${_initialCenter.latitude.toStringAsFixed(3)}, ${_initialCenter.longitude.toStringAsFixed(3)})";
+        _currentPosition = _initialCenter;
+        _currentCoordinates =
+            "Gagal dapat lokasi. (${_initialCenter.latitude.toStringAsFixed(3)}, ${_initialCenter.longitude.toStringAsFixed(3)})";
         _currentAddress = "Silakan coba lagi atau pilih manual.";
       });
-       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if(mounted) _mapController.move(_initialCenter, _initialZoom);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _mapController.move(_initialCenter, _initialZoom);
       });
     }
   }
 
   Future<void> _getCurrentLocationAndPin() async {
+    // ... (logika _getCurrentLocationAndPin Anda yang sudah disempurnakan)
     bool serviceEnabled;
     LocationPermission permission;
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Layanan lokasi tidak aktif. Mohon aktifkan.'), backgroundColor: Colors.orange));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Layanan lokasi tidak aktif. Mohon aktifkan.'),
+          backgroundColor: Colors.orange));
       await Geolocator.openLocationSettings();
       return;
     }
@@ -129,18 +140,23 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         if (!mounted) return;
-         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Izin lokasi ditolak.'), backgroundColor: Colors.orange));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Izin lokasi ditolak.'),
+            backgroundColor: Colors.orange));
         return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
       if (!mounted) return;
-       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Izin lokasi ditolak permanen. Mohon aktifkan dari pengaturan aplikasi.'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Izin lokasi ditolak permanen. Mohon aktifkan dari pengaturan aplikasi.'),
+          backgroundColor: Colors.red));
       await Geolocator.openAppSettings();
       return;
     }
-    
+
     if (!mounted) return;
     setState(() {
       _currentAddress = "Mencari lokasi...";
@@ -149,7 +165,7 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
 
     try {
       Position position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high); 
+          desiredAccuracy: LocationAccuracy.high);
       LatLng newPosition = LatLng(position.latitude, position.longitude);
       if (!mounted) return;
       setState(() {
@@ -169,6 +185,7 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
   }
 
   Future<void> _getAddressFromLatLng(LatLng latLng) async {
+    // ... (logika _getAddressFromLatLng Anda yang sudah disempurnakan)
     if (!mounted) return;
     try {
       List<Placemark> placemarks =
@@ -195,9 +212,11 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
         ];
         addressParts.removeWhere((part) => part.isEmpty);
         String formattedAddress = addressParts.join(', ');
-        
+
         setState(() {
-          _currentAddress = formattedAddress.isEmpty ? "Detail alamat tidak tersedia." : formattedAddress;
+          _currentAddress = formattedAddress.isEmpty
+              ? "Detail alamat tidak tersedia."
+              : formattedAddress;
         });
       } else {
         setState(() {
@@ -214,6 +233,7 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
   }
 
   void _onMapTap(TapPosition tapPosition, LatLng latLng) {
+    // ... (logika _onMapTap Anda yang sudah disempurnakan)
     if (!mounted) return;
     setState(() {
       _currentPosition = latLng;
@@ -223,40 +243,46 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
     _getAddressFromLatLng(latLng);
   }
 
-
-  // Fungsi untuk menampilkan BottomSheet laporan
-  void _showReportBottomSheet(BuildContext mainScreenContext, LatLng position, String address) {
-    XFile? _selectedImageInBottomSheet; // State untuk gambar di bottom sheet
-    _descriptionController.clear(); // Bersihkan deskripsi setiap kali sheet dibuka
+  void _showReportBottomSheet(
+      BuildContext mainScreenContext, LatLng position, String address) {
+    XFile? _selectedImageInBottomSheet;
+    _descriptionController.clear();
 
     showModalBottomSheet(
       context: mainScreenContext,
-      isScrollControlled: true, // Agar bisa lebih tinggi dari setengah layar
-      shape: const RoundedRectangleBorder( // Memberi border radius di atas
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
       ),
       builder: (BuildContext builderContext) {
-        return StatefulBuilder( // Untuk update UI di dalam bottom sheet
+        // Ini adalah context untuk BottomSheet
+        return StatefulBuilder(
           builder: (BuildContext context, StateSetter setStateBottomSheet) {
             return Padding(
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom, // Untuk keyboard
-                top: 20, left: 20, right: 20
-              ),
-              child: SingleChildScrollView( // Agar konten bisa di-scroll jika panjang
+                  bottom: MediaQuery.of(context).viewInsets.bottom,
+                  top: 20,
+                  left: 20,
+                  right: 20),
+              child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Center( // Judul "Laporkan"
+                    // ... (Konten BottomSheet: Judul, Alamat, Koordinat, Deskripsi, Preview Gambar, Tombol Upload) ...
+                    // (Ini sama seperti kode Anda sebelumnya)
+                    Center(
                       child: Text(
                         'Laporkan',
-                        style: CustomTextStyles.boldXl.copyWith(color: CustomColors.primary900),
+                        style: CustomTextStyles.boldXl
+                            .copyWith(color: CustomColors.primary900),
                       ),
                     ),
                     const SizedBox(height: 20),
 
-                    Text('Alamat Laporan', style: CustomTextStyles.mediumBase.copyWith(color: CustomColors.secondary400)),
+                    Text('Alamat Laporan',
+                        style: CustomTextStyles.mediumBase
+                            .copyWith(color: CustomColors.secondary400)),
                     const SizedBox(height: 4),
                     Container(
                       width: double.infinity,
@@ -265,11 +291,15 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                         border: Border.all(color: CustomColors.secondary200),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(address, style: CustomTextStyles.regularBase.copyWith(color: CustomColors.secondary500)),
+                      child: Text(address,
+                          style: CustomTextStyles.regularBase
+                              .copyWith(color: CustomColors.secondary500)),
                     ),
                     const SizedBox(height: 16),
 
-                    Text('Koordinat', style: CustomTextStyles.mediumBase.copyWith(color: CustomColors.secondary400)),
+                    Text('Koordinat',
+                        style: CustomTextStyles.mediumBase
+                            .copyWith(color: CustomColors.secondary400)),
                     const SizedBox(height: 4),
                     Container(
                       width: double.infinity,
@@ -280,66 +310,86 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                       ),
                       child: Text(
                         '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}',
-                        style: CustomTextStyles.regularBase.copyWith(color: CustomColors.secondary500),
+                        style: CustomTextStyles.regularBase
+                            .copyWith(color: CustomColors.secondary500),
                       ),
                     ),
                     const SizedBox(height: 16),
 
-                    Text('Deskripsi', style: CustomTextStyles.mediumBase.copyWith(color: CustomColors.secondary400)),
+                    Text('Deskripsi',
+                        style: CustomTextStyles.mediumBase
+                            .copyWith(color: CustomColors.secondary400)),
                     const SizedBox(height: 4),
                     TextField(
                       controller: _descriptionController,
                       maxLines: 3,
                       decoration: InputDecoration(
                         hintText: 'Masukan detail laporan',
-                        hintStyle: CustomTextStyles.regularBase.copyWith(color: CustomColors.secondary300),
+                        hintStyle: CustomTextStyles.regularBase
+                            .copyWith(color: CustomColors.secondary300),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: CustomColors.secondary200),
+                          borderSide:
+                              BorderSide(color: CustomColors.secondary200),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: CustomColors.primary500, width: 1.5),
+                          borderSide: BorderSide(
+                              color: CustomColors.primary500, width: 1.5),
                         ),
                         contentPadding: const EdgeInsets.all(12),
                       ),
-                      style: CustomTextStyles.regularBase.copyWith(color: CustomColors.secondary500),
+                      style: CustomTextStyles.regularBase
+                          .copyWith(color: CustomColors.secondary500),
                     ),
                     const SizedBox(height: 16),
 
-                    Text('Bukti Laporan', style: CustomTextStyles.mediumBase.copyWith(color: CustomColors.secondary400)),
+                    Text('Bukti Laporan',
+                        style: CustomTextStyles.mediumBase
+                            .copyWith(color: CustomColors.secondary400)),
                     const SizedBox(height: 8),
-                    Center( // Agar image preview dan tombol upload di tengah
+                    Center(
                       child: Column(
                         children: [
                           Container(
                             height: 150,
-                            width: 200, // Atau double.infinity jika ingin lebar penuh
+                            width: 200,
                             decoration: BoxDecoration(
                               color: CustomColors.tertiary100,
-                              border: Border.all(color: CustomColors.secondary200),
+                              border:
+                                  Border.all(color: CustomColors.secondary200),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: _selectedImageInBottomSheet == null
                                 ? Center(
-                                    child: Icon(Icons.image_not_supported_outlined, size: 50, color: CustomColors.secondary300)
-                                  )
+                                    child: Icon(
+                                        Icons.image_not_supported_outlined,
+                                        size: 50,
+                                        color: CustomColors.secondary300))
                                 : ClipRRect(
                                     borderRadius: BorderRadius.circular(7.0),
-                                    child: Image.file(File(_selectedImageInBottomSheet!.path), fit: BoxFit.cover),
+                                    child: Image.file(
+                                        File(_selectedImageInBottomSheet!.path),
+                                        fit: BoxFit.cover),
                                   ),
                           ),
                           const SizedBox(height: 12),
                           ElevatedButton.icon(
-                            icon: Icon(Icons.camera_alt_outlined, color: CustomColors.tertiary50, size: 20),
-                            label: Text('Upload Gambar', style: CustomTextStyles.mediumSm.copyWith(color: CustomColors.tertiary50)),
+                            icon: Icon(Icons.camera_alt_outlined,
+                                color: CustomColors.tertiary50, size: 20),
+                            label: Text('Upload Gambar',
+                                style: CustomTextStyles.mediumSm
+                                    .copyWith(color: CustomColors.tertiary50)),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: CustomColors.primary500, // Warna tombol upload
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))
-                            ),
+                                backgroundColor: CustomColors.primary500,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 24, vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20))),
                             onPressed: () async {
-                              final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+                              final XFile? image = await _picker.pickImage(
+                                  source: ImageSource.gallery,
+                                  imageQuality: 70);
                               if (image != null) {
                                 setStateBottomSheet(() {
                                   _selectedImageInBottomSheet = image;
@@ -351,18 +401,22 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
-
-                    Row( // Tombol Batal dan Kirim Laporan
+                    Row(
                       children: [
                         Expanded(
                           child: OutlinedButton(
                             style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: CustomColors.secondary300),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
-                            ),
-                            child: Text('Batal', style: CustomTextStyles.boldSm.copyWith(color: CustomColors.secondary400)),
-                            onPressed: () => Navigator.of(builderContext).pop(),
+                                side: BorderSide(
+                                    color: CustomColors.secondary300),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30))),
+                            child: Text('Batal',
+                                style: CustomTextStyles.boldSm.copyWith(
+                                    color: CustomColors.secondary400)),
+                            onPressed: () => Navigator.of(builderContext)
+                                .pop(), // Gunakan builderContext
                           ),
                         ),
                         const SizedBox(width: 16),
@@ -372,35 +426,163 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                               backgroundColor: CustomColors.primary500,
                               foregroundColor: CustomColors.tertiary50,
                               padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30))
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30)),
+                              textStyle: CustomTextStyles
+                                  .boldSm, // Untuk ukuran & ketebalan teks
                             ),
-                            child: Text('Kirim Laporan', style: CustomTextStyles.boldSm.copyWith(color: CustomColors.primary50)),
-                            onPressed: () {
-                              if (_selectedImageInBottomSheet == null) {
-                                ScaffoldMessenger.of(mainScreenContext).showSnackBar(
-                                  SnackBar(content: Text('Mohon pilih gambar bukti terlebih dahulu!'), backgroundColor: Colors.orange),
-                                );
-                                return;
-                              }
-                              final String deskripsiLaporan = _descriptionController.text;
-                              print('Laporan Dikirim:');
-                              print('Alamat: $address');
-                              print('Koordinat: ${position.latitude}, ${position.longitude}');
-                              print('Deskripsi: $deskripsiLaporan');
-                              print('Path Gambar: ${_selectedImageInBottomSheet?.path}');
+                            // Di dalam _showReportBottomSheet, pada onPressed tombol 'Kirim Laporan':
 
-                              // TODO: Implementasikan logika pengiriman laporan ke server di sini
+                            onPressed: _isSendingReport
+                                ? null
+                                : () async {
+                                    if (_selectedImageInBottomSheet == null) {
+                                      ScaffoldMessenger.of(mainScreenContext)
+                                          .showSnackBar(
+                                        SnackBar(
+                                            content: Text(
+                                                'Mohon pilih gambar bukti terlebih dahulu!'),
+                                            backgroundColor:
+                                          
+                                                    Colors.orange),
+                                      );
+                                      return;
+                                    }
 
-                              Navigator.of(builderContext).pop(); // Tutup bottom sheet
-                              ScaffoldMessenger.of(mainScreenContext).showSnackBar(
-                                SnackBar(content: Text('Laporan untuk "$address" berhasil dikirim (simulasi)!'), backgroundColor: Colors.green),
-                              );
-                            },
+                                    setStateBottomSheet(() {
+                                      _isSendingReport = true;
+                                    });
+
+                                    String imageUrlForBackend =
+                                        "https://via.placeholder.com/300/09f/fff.png?text=BuktiLaporanDefault";
+                                    if (_selectedImageInBottomSheet != null) {
+                                      print(
+                                          'Path gambar lokal yang akan diupload (simulasi): ${_selectedImageInBottomSheet!.path}');
+                                      // imageUrlForBackend = await _uploadImageFunction(File(_selectedImageInBottomSheet!.path)); // Jika sudah ada fungsi upload
+                                    }
+
+                                    final SharedPreferences prefs =
+                                        await SharedPreferences.getInstance();
+                                    final int? pelaporId =
+                                        prefs.getInt('user_id');
+
+                                    if (pelaporId == null) {
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(mainScreenContext)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                            content: Text(
+                                                'Gagal mendapatkan ID pengguna. Mohon login ulang.'),
+                                            backgroundColor: Colors.red),
+                                      );
+                                      setStateBottomSheet(() {
+                                        _isSendingReport = false;
+                                      });
+                                      return;
+                                    }
+
+                                    Map<String, dynamic> reportData = {
+                                      "alamat":
+                                          address, // address dari parameter _showReportBottomSheet
+                                      "koordinatLatitude": position
+                                          .latitude, // position dari parameter _showReportBottomSheet
+                                      "koordinatLongitude": position.longitude,
+                                      "description":
+                                          _descriptionController.text,
+                                      "imageUrl": imageUrlForBackend,
+                                      "pelaporId": pelaporId,
+                                      // "status": "BARU" // Biarkan backend yang set default jika sudah diatur di Prisma
+                                    };
+
+                                    // --- TAMBAHKAN LOG DI SINI ---
+                                    print(
+                                        "--- DATA LAPORAN YANG AKAN DIKIRIM ---");
+                                    print(jsonEncode(
+                                        reportData)); // Cetak data yang akan dikirim sebagai JSON
+                                    // --- AKHIR LOG ---
+
+                                    const String apiUrl =
+                                        'https://broadly-neutral-osprey.ngrok-free.app/api/laporan'; // Untuk emulator Android
+                                    // const String apiUrl = 'http://localhost:3000/api/laporan'; // Untuk web/device di jaringan sama
+                                    print("Mengirim request ke: $apiUrl");
+
+                                    try {
+                                      final response = await http.post(
+                                        Uri.parse(apiUrl),
+                                        headers: {
+                                          'Content-Type':
+                                              'application/json; charset=UTF-8'
+                                        },
+                                        body: jsonEncode(reportData),
+                                      );
+
+                                      // --- TAMBAHKAN LOG DI SINI ---
+                                      print("--- RESPON SERVER ---");
+                                      print(
+                                          'Status Code: ${response.statusCode}');
+                                      print('Response Body: ${response.body}');
+                                      // --- AKHIR LOG ---
+
+                                      if (!mainScreenContext.mounted) return;
+                                      final Map<String, dynamic> responseData =
+                                          jsonDecode(response.body);
+
+                                      if (response.statusCode == 201 &&
+                                          responseData['success'] == true) {
+                                        Navigator.of(builderContext).pop();
+                                        ScaffoldMessenger.of(mainScreenContext)
+                                            .showSnackBar(
+                                          SnackBar(
+                                              content: Text(responseData[
+                                                      'message'] ??
+                                                  'Laporan berhasil dikirim!'),
+                                              backgroundColor:
+                                            
+                                                      Colors.green),
+                                        );
+                                      } else {
+                                        ScaffoldMessenger.of(mainScreenContext)
+                                            .showSnackBar(
+                                          SnackBar(
+                                              content: Text(responseData[
+                                                      'error'] ??
+                                                  'Gagal mengirim laporan. Status: ${response.statusCode}'),
+                                              backgroundColor:
+                                         
+                                                      Colors.red),
+                                        );
+                                      }
+                                    } catch (e) {
+                                      print('--- ERROR PADA HTTP REQUEST ---');
+                                      print(
+                                          'Error mengirim laporan: ${e.toString()}');
+                                      if (!mainScreenContext.mounted) return;
+                                      ScaffoldMessenger.of(mainScreenContext)
+                                          .showSnackBar(
+                                        SnackBar(
+                                            content: Text(
+                                                'Terjadi kesalahan jaringan: ${e.toString()}'),
+                                            backgroundColor: Colors.red),
+                                      );
+                                    } finally {
+                                      setStateBottomSheet(() {
+                                        _isSendingReport = false;
+                                      });
+                                    }
+                                  },
+                            child: _isSendingReport
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: Colors.white))
+                                : Text('Kirim Laporan',
+                                    style: CustomTextStyles.boldSm),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16), // Sedikit padding di bawah tombol
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
@@ -410,7 +592,6 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
       },
     );
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -438,7 +619,8 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.pui', // GANTI DENGAN PACKAGE NAME ANDA
+                userAgentPackageName:
+                    'com.example.pui', // GANTI DENGAN PACKAGE NAME ANDA
               ),
               if (_currentPosition != null)
                 MarkerLayer(
@@ -449,7 +631,7 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                       point: _currentPosition!,
                       child: Icon(
                         Icons.fmd_good,
-                        color: CustomColors.primary400 ,
+                        color: CustomColors.primary400, // Sesuaikan warna pin
                         size: 45.0,
                       ),
                     ),
@@ -473,7 +655,8 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.gps_fixed, color: CustomColors.primary500, size: 16),
+                        Icon(Icons.gps_fixed,
+                            color: CustomColors.primary500, size: 16),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -485,16 +668,17 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                     Row(
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.location_on_outlined, color: CustomColors.secondary500, size: 16),
+                        Icon(Icons.location_on_outlined,
+                            color: CustomColors.secondary500, size: 16),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _currentAddress,
-                            style: CustomTextStyles.regularXs
-                                .copyWith(color: CustomColors.secondary500, height: 1.4),
+                            style: CustomTextStyles.regularXs.copyWith(
+                                color: CustomColors.secondary500, height: 1.4),
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -519,32 +703,48 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                   foregroundColor: CustomColors.tertiary50,
                   padding: EdgeInsets.zero,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30)),
+                      borderRadius: BorderRadius.circular(
+                          30)), // Radius 30 seperti di gambar sheet
                   textStyle: CustomTextStyles.boldLg,
                 ),
-                onPressed: () {
-                  if (_currentPosition != null && _currentAddress.isNotEmpty && _currentAddress != "Memuat alamat..." && !_currentAddress.toLowerCase().contains("gagal") && !_currentAddress.toLowerCase().contains("ditolak")) {
-                    _showReportBottomSheet(context, _currentPosition!, _currentAddress);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Pilih lokasi yang valid atau tunggu alamat dimuat!'), backgroundColor: Colors.orange,));
-                  }
-                },
-                child: const Center(
-                  child: Text('Laporkan'),
-                ),
+                onPressed: (_isSendingReport ||
+                        _currentPosition == null ||
+                        _currentAddress.isEmpty ||
+                        _currentAddress == "Memuat alamat..." ||
+                        _currentAddress.toLowerCase().contains("gagal") ||
+                        _currentAddress.toLowerCase().contains("ditolak") ||
+                        _currentAddress.toLowerCase().contains("nonaktif") ||
+                        _currentAddress
+                            .toLowerCase()
+                            .contains("tidak tersedia"))
+                    ? null // Disable tombol jika sedang mengirim atau lokasi/alamat tidak valid
+                    : () {
+                        _showReportBottomSheet(
+                            context, _currentPosition!, _currentAddress);
+                      },
+                child: _isSendingReport
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 3))
+                    : const Text('Laporkan'),
               ),
             ),
           ),
           Positioned(
-            bottom: totalBottomSpaceForNavBar + reportButtonWithVerticalSpacing + 10,
+            bottom: totalBottomSpaceForNavBar +
+                reportButtonWithVerticalSpacing +
+                10,
             right: 20,
             child: FloatingActionButton(
               heroTag: "fabLokasiSaya",
               mini: true,
               backgroundColor: CustomColors.tertiary50,
               elevation: 3,
-              onPressed: _getCurrentLocationAndPin,
+              onPressed: _isSendingReport
+                  ? null
+                  : _getCurrentLocationAndPin, // Disable juga saat mengirim
               child: Icon(
                 Icons.my_location,
                 color: CustomColors.primary500,
