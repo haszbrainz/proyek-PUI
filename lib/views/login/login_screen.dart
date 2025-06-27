@@ -6,29 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart'; // Impor shared_pre
 import 'package:pui/themes/custom_colors.dart';
 import 'package:pui/themes/custom_text_styles.dart';
 import 'registration_screen.dart';
-// import 'package:pui/models/account_manager.dart'; // Tidak digunakan lagi untuk login ke backend
 import 'package:pui/views/home/home_screen.dart';
-
-// Hapus atau komentari main() dan MyApp jika LoginScreen bukan entry point utama aplikasi Anda lagi
-// dan sudah diatur melalui MaterialApp di main.dart yang menggunakan named routes.
-// void main() {
-//   runApp(const MyApp());
-// }
-
-// class MyApp extends StatelessWidget {
-//   const MyApp({super.key});
-//   @override
-//   Widget build(BuildContext context) {
-//     return MaterialApp(
-//       title: 'Login Screen',
-//       theme: ThemeData(
-//         primarySwatch: Colors.blue,
-//         fontFamily: 'Poppins',
-//       ),
-//       home: const LoginScreen(),
-//     );
-//   }
-// }
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

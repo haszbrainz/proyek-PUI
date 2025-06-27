@@ -9,7 +9,7 @@ import 'package:pui/themes/custom_text_styles.dart'; // Sesuaikan path jika perl
 
 // Impor LoginScreen jika berada di file terpisah
 // Sesuaikan path 'login_screen.dart' jika nama file atau lokasinya berbeda
-import 'login_screen.dart'; 
+import 'login_screen.dart';
 // import 'package:pui/models/account_manager.dart'; // Ini tidak kita gunakan lagi untuk registrasi ke backend
 
 class RegistrationScreen extends StatefulWidget {
@@ -27,12 +27,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final TextEditingController _fullNameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _confirmPasswordController =
+      TextEditingController();
   final TextEditingController _addressController = TextEditingController();
 
   // GlobalKey untuk Form (opsional, tapi bagus untuk validasi)
   final _formKey = GlobalKey<FormState>();
-
 
   @override
   void dispose() {
@@ -49,20 +49,24 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     // Validasi sederhana (Anda bisa menambahkan validasi lebih detail)
     if (_passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Konfirmasi kata sandi tidak cocok!'), backgroundColor: Colors.red),
+        const SnackBar(
+            content: Text('Konfirmasi kata sandi tidak cocok!'),
+            backgroundColor: Colors.red),
       );
       return;
     }
-    if (_emailController.text.isEmpty || 
+    if (_emailController.text.isEmpty ||
         _passwordController.text.isEmpty ||
         _fullNameController.text.isEmpty || // Asumsi nama lengkap wajib
-        _addressController.text.isEmpty) { // Asumsi alamat wajib
+        _addressController.text.isEmpty) {
+      // Asumsi alamat wajib
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Mohon isi semua field yang wajib!'), backgroundColor: Colors.orange),
+        const SnackBar(
+            content: Text('Mohon isi semua field yang wajib!'),
+            backgroundColor: Colors.orange),
       );
       return;
     }
-
 
     setState(() {
       _isLoading = true; // Tampilkan loading indicator
@@ -71,13 +75,13 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     // URL endpoint backend Anda (sesuaikan jika berbeda)
     // Jika menjalankan backend di PC yang sama dengan emulator Android, gunakan 10.0.2.2
     // Jika menjalankan di PC yang sama dengan web atau physical device di jaringan sama, gunakan IP lokal PC Anda (misal, 192.168.1.X)
-    const String apiUrl = 'https://broadly-neutral-osprey.ngrok-free.app/api/users/register'; // Untuk emulator Android
+    const String apiUrl =
+        'https://broadly-neutral-osprey.ngrok-free.app/api/users/register'; // Untuk emulator Android
     // const String apiUrl = 'http://localhost:3000/api/users/register'; // Jika Flutter web & backend di mesin sama
 
     try {
       final response = await http.post(
         Uri.parse(apiUrl),
-        
         headers: <String, String>{
           'Content-Type': 'application/json; charset=UTF-8',
         },
@@ -97,7 +101,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       if (response.statusCode == 201 && responseData['success'] == true) {
         // Registrasi berhasil
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(responseData['message'] ?? 'Akun berhasil dibuat!'), backgroundColor: Colors.green),
+          SnackBar(
+              content: Text(responseData['message'] ?? 'Akun berhasil dibuat!'),
+              backgroundColor: Colors.green),
         );
         // Delay sejenak agar Snackbar terlihat sebelum navigasi kembali
         Future.delayed(const Duration(seconds: 2), () {
@@ -108,7 +114,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       } else {
         // Registrasi gagal dari backend
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(responseData['error'] ?? 'Registrasi gagal. Silakan coba lagi.'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(responseData['error'] ??
+                  'Registrasi gagal. Silakan coba lagi.'),
+              backgroundColor: Colors.red),
         );
       }
     } catch (e) {
@@ -116,7 +125,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       print('Error saat registrasi: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Terjadi kesalahan: ${e.toString()}'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Terjadi kesalahan: ${e.toString()}'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -128,7 +139,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     }
   }
   // --- AKHIR FUNGSI REGISTRASI ---
-
 
   Widget _buildStyledTextField({
     required TextEditingController controller,
@@ -158,8 +168,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         ),
         const SizedBox(height: 8),
         SizedBox(
-          width: 380, // Pertimbangkan untuk menggunakan MediaQuery untuk lebar responsif
-          child: TextFormField( // Ganti TextField menjadi TextFormField untuk validasi
+          width:
+              380, // Pertimbangkan untuk menggunakan MediaQuery untuk lebar responsif
+          child: TextFormField(
+            // Ganti TextField menjadi TextFormField untuk validasi
             controller: controller,
             obscureText: obscureText,
             keyboardType: keyboardType,
@@ -208,15 +220,18 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 20.0), // Padding disesuaikan
-            child: Form( // Bungkus dengan Form widget
+            padding: const EdgeInsets.symmetric(
+                horizontal: 16.0, vertical: 20.0), // Padding disesuaikan
+            child: Form(
+              // Bungkus dengan Form widget
               key: _formKey, // Gunakan GlobalKey untuk Form
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   const Text(
                     'Buat Akun Baru',
-                    style: TextStyle( // Bisa juga CustomTextStyles
+                    style: TextStyle(
+                      // Bisa juga CustomTextStyles
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       color: CustomColors.secondary900,
@@ -225,7 +240,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   const SizedBox(height: 12),
                   Text(
                     'Silahkan isi data diri Anda untuk mendaftar.',
-                    style: TextStyle( // Bisa juga CustomTextStyles
+                    style: TextStyle(
+                      // Bisa juga CustomTextStyles
                       fontSize: 16,
                       color: Colors.grey[700],
                     ),
@@ -252,7 +268,9 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Email tidak boleh kosong';
                       }
-                      if (!RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+").hasMatch(value)) {
+                      if (!RegExp(
+                              r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+")
+                          .hasMatch(value)) {
                         return 'Masukkan format email yang valid';
                       }
                       return null;
@@ -280,7 +298,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Kata sandi tidak boleh kosong';
                       }
-                      if (value.length < 6) { // Contoh validasi panjang password
+                      if (value.length < 6) {
+                        // Contoh validasi panjang password
                         return 'Kata sandi minimal 6 karakter';
                       }
                       return null;
@@ -300,7 +319,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       ),
                       onPressed: () {
                         setState(() {
-                          _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                          _isConfirmPasswordVisible =
+                              !_isConfirmPasswordVisible;
                         });
                       },
                     ),
@@ -320,33 +340,40 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                     hintText: 'Masukkan alamat lengkap Anda',
                     keyboardType: TextInputType.multiline,
                     isAddressField: true,
-                     validator: (value) {
+                    validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Alamat tidak boleh kosong';
                       }
                       return null;
                     },
                   ),
-                  SizedBox( // SizedBox untuk spasi sebelum tombol
+                  SizedBox(
+                    // SizedBox untuk spasi sebelum tombol
                     height: 24,
                   ),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : () { // Disable tombol saat loading
-                        if (_formKey.currentState!.validate()) { // Panggil validasi form
-                           _registerUser();
-                        }
-                      },
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              // Disable tombol saat loading
+                              if (_formKey.currentState!.validate()) {
+                                // Panggil validasi form
+                                _registerUser();
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: CustomColors.primary500,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(5.0),
                         ),
-                        fixedSize: const Size(380, 48), // Lebar disesuaikan dengan _buildStyledTextField atau gunakan MediaQuery
+                        fixedSize: const Size(380,
+                            48), // Lebar disesuaikan dengan _buildStyledTextField atau gunakan MediaQuery
                         padding: const EdgeInsets.symmetric(vertical: 0),
-                      ).copyWith( // textStyle diset dengan benar
+                      ).copyWith(
+                        // textStyle diset dengan benar
                         textStyle: MaterialStateProperty.all(
                           CustomTextStyles.mediumSm.copyWith(
                             fontWeight: FontWeight.bold,
@@ -354,12 +381,12 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                           ),
                         ),
                       ),
-                      child: _isLoading 
+                      child: _isLoading
                           ? const SizedBox(
-                              width: 24, 
-                              height: 24, 
-                              child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white)
-                            ) 
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 3, color: Colors.white))
                           : const Text('Daftar'),
                     ),
                   ),

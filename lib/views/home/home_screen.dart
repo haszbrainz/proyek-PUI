@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:pui/themes/custom_colors.dart';
 import 'package:pui/themes/custom_text_styles.dart';
+import 'package:pui/views/laporkan/lihat_laporan.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:pui/widgets/reccomendation/type.dart';
-import 'package:pui/widgets/reccomendation/item.dart'; // Komentar dari kode Anda
-import 'package:pui/widgets/navigation/bar.dart'; // Asumsi FloatingNavigationBar ada di sini
-import 'package:pui/views/artikel/artikel_screen.dart';
+import 'package:pui/widgets/reccomendation/item.dart';
+import 'package:pui/widgets/navigation/bar.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Impor SharedPreferences
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,7 +16,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final PageController _bannerPageController = PageController();
-  // ... (sisa state variabel tetap sama) ...
+  String? _userName; // State untuk menyimpan nama pengguna
+  bool _isLoading = true; // State untuk loading
+
   final List<String> bannerImagePaths = [
     'assets/images/banner1.png',
     'assets/images/banner1.png',
@@ -44,11 +47,24 @@ class _HomeScreenState extends State<HomeScreen> {
     ),
   ];
 
-
   @override
   void initState() {
     super.initState();
+    _loadUserData(); // Panggil fungsi untuk memuat data user
   }
+
+  // --- FUNGSI BARU UNTUK MENGAMBIL NAMA PENGGUNA ---
+  Future<void> _loadUserData() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        // Ambil nama dari SharedPreferences, beri nilai default jika tidak ada
+        _userName = prefs.getString('user_name') ?? 'Pengguna';
+        _isLoading = false;
+      });
+    }
+  }
+  // --- AKHIR FUNGSI ---
 
   @override
   void dispose() {
@@ -59,66 +75,60 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: CustomColors.tertiary50, // Menggunakan CustomColors
+      backgroundColor: CustomColors.tertiary50,
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(96.0),
+        preferredSize: const Size.fromHeight(70.0), // Sesuaikan tinggi AppBar
         child: AppBar(
-          backgroundColor: CustomColors.tertiary50, // Menggunakan CustomColors
+          backgroundColor: CustomColors.tertiary50,
           elevation: 0,
           automaticallyImplyLeading: false,
           flexibleSpace: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-              child: Stack(
-                alignment: Alignment.center,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Row( // Menggunakan Row untuk tata letak yang lebih fleksibel
                 children: [
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: CircleAvatar(
-                      radius: 24,
-                      backgroundImage: const AssetImage('assets/images/user.png'),
-                      onBackgroundImageError: (exception, stackTrace) {
-                         print('Error loading user image: $exception');
-                      },
-                      // Fallback jika gambar gagal atau tidak ada
-                      // child: const Icon(Icons.person, size: 24, color: CustomColors.secondary200), // Menggunakan CustomColors
-                    ),
+                  // --- FOTO PROFIL ---
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: CustomColors.secondary100,
+                    backgroundImage: const AssetImage('assets/images/user.png'), // Gambar dummy
                   ),
-                  Center(
+                  const SizedBox(width: 12),
+
+                  // --- UCAPAN SELAMAT DATANG & NAMA PENGGUNA ---
+                  Expanded(
                     child: Column(
-                      mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(
-                          'Selamat Datang',
-                          // Anda bisa juga menggunakan CustomTextStyles di sini jika sudah ada definisi yang sesuai
-                          style: TextStyle(
-                            color: CustomColors.primary900, // Menggunakan CustomColors
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          'Selamat Datang,',
+                          style: CustomTextStyles.regularSm
+                              .copyWith(color: CustomColors.secondary400),
                         ),
-                        Text(
-                          'Samuel', // Sebaiknya nama pengguna dinamis
-                          // Anda bisa juga menggunakan CustomTextStyles di sini
-                          style: TextStyle(
-                            color: CustomColors.secondary500, // Menggunakan CustomColors
-                            fontSize: 14,
-                            fontWeight: FontWeight.normal,
-                          ),
-                        ),
+                        // Tampilkan nama pengguna dari state, atau "Memuat..." saat loading
+                        _isLoading
+                            ? const Text("Memuat...", style: TextStyle(fontSize: 14))
+                            : Text(
+                                _userName ?? 'Pengguna', // Tampilkan nama dari state
+                                style: CustomTextStyles.boldLg
+                                    .copyWith(color: CustomColors.primary900),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                       ],
                     ),
                   ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: IconButton(
-                      icon: const Icon(Icons.settings, color: CustomColors.primary500, size: 28), // Menggunakan CustomColors
-                      onPressed: () {
-                        print("Tombol Settings ditekan.");
-                        // Implementasi navigasi atau aksi untuk pengaturan
-                      },
-                    ),
+                  const SizedBox(width: 12),
+
+                  // --- ICON ---
+                  IconButton(
+                    icon: Icon(Icons.settings,
+                        color: CustomColors.secondary400, size: 28),
+                    onPressed: () {
+                      print("Tombol Settings ditekan.");
+                      // TODO: Implementasi navigasi atau aksi untuk pengaturan
+                    },
                   ),
                 ],
               ),
@@ -136,16 +146,8 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(
                 height: 110,
                 child: PageView.builder(
-                  scrollDirection: Axis.horizontal,
                   controller: _bannerPageController,
                   itemCount: bannerImagePaths.length,
-                  onPageChanged: (index) {
-                    if (mounted) {
-                      setState(() {
-                        // _currentBannerPage = index; // _currentBannerPage tidak digunakan, bisa dihapus jika tidak ada rencana penggunaan
-                      });
-                    }
-                  },
                   itemBuilder: (context, index) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -155,13 +157,12 @@ class _HomeScreenState extends State<HomeScreen> {
                           bannerImagePaths[index],
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) {
-                            print(
-                                'Error loading banner asset: ${bannerImagePaths[index]}, Error: $error');
                             return Container(
-                              color: CustomColors.secondary100, // Tetap menggunakan secondary100 untuk error box
+                              color: CustomColors.secondary100,
                               child: Center(
                                 child: Icon(Icons.broken_image_outlined,
-                                    color: CustomColors.secondary300, size: 50), // Tetap menggunakan secondary300
+                                    color: CustomColors.secondary300,
+                                    size: 50),
                               ),
                             );
                           },
@@ -177,20 +178,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: SmoothPageIndicator(
                     controller: _bannerPageController,
                     count: bannerImagePaths.length,
-                    axisDirection: Axis.horizontal,
                     effect: WormEffect(
                       dotHeight: 8.0,
                       dotWidth: 8.0,
-                      activeDotColor: CustomColors.primary500, // Sudah menggunakan CustomColors
-                      dotColor: CustomColors.secondary200,  // Sudah menggunakan CustomColors
+                      activeDotColor: CustomColors.primary500,
+                      dotColor: CustomColors.secondary200,
                     ),
-                    onDotClicked: (index) {
-                      _bannerPageController.animateToPage(
-                        index,
-                        duration: const Duration(milliseconds: 400),
-                        curve: Curves.easeInOut,
-                      );
-                    },
                   ),
                 ),
               const SizedBox(height: 24),
@@ -204,14 +197,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text(
                     'Kenali Ancaman Sungai',
                     style: CustomTextStyles.boldLg
-                        .copyWith(color: CustomColors.primary900), // Sudah menggunakan CustomColors
+                        .copyWith(color: CustomColors.primary900),
                   ),
-                   TextButton(
+                  TextButton(
                     onPressed: () {
-                      // --- PERUBAHAN NAVIGASI ---
-                      print('Tombol "Lihat semua" ikan ditekan. Navigasi ke ArtikelScreen...');
-                      Navigator.pushNamed(context, '/artikel'); // Gunakan rute bernama
-                      // --- AKHIR PERUBAHAN NAVIGASI ---
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const LihatLaporanScreen(),
+                        ),
+                      );
                     },
                     child: Text(
                       'Lihat semua',
@@ -236,12 +231,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             
-            const SizedBox(height: 80),
+            const SizedBox(height: 100), // Ruang untuk FloatingNavBar
           ],
         ),
       ),
-      floatingActionButton: const FloatingNavigationBar(initialIndex: 0), // Beranda
-floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: const FloatingNavigationBar(initialIndex: 0),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 }
