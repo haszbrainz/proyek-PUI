@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:pui/themes/custom_colors.dart';
 import 'package:pui/themes/custom_text_styles.dart';
+import 'package:pui/views/artikel/artikel_screen.dart';
 import 'package:pui/views/laporkan/lihat_laporan.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:pui/widgets/reccomendation/type.dart';
@@ -204,7 +205,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const LihatLaporanScreen(),
+                          builder: (context) => const ArtikelScreen(),
                         ),
                       );
                     },
