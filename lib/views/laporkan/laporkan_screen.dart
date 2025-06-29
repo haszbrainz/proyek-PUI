@@ -10,12 +10,14 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:mime/mime.dart';
+import 'package:http_parser/http_parser.dart'; // Diperlukan untuk MediaType
 
 // Sesuaikan path impor Anda
 import 'package:pui/themes/custom_colors.dart';
 import 'package:pui/themes/custom_text_styles.dart';
 import 'package:pui/widgets/navigation/bar.dart';
-import 'package:pui/views/laporkan/lihat_laporan.dart'; // Ganti nama file jika perlu
+import 'package:pui/views/laporkan/lihat_laporan.dart';
 
 class LaporkanScreen extends StatefulWidget {
   const LaporkanScreen({super.key});
@@ -54,7 +56,7 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
     super.dispose();
   }
 
-  // --- LOGIKA LOKASI & ALAMAT YANG DIPERBAIKI ---
+  // --- LOGIKA LOKASI & ALAMAT (TIDAK ADA PERUBAHAN) ---
   Future<void> _setDefaultLocation() async {
     if (!mounted) return;
     setState(() {
@@ -161,7 +163,7 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
     });
   }
 
-  // --- FUNGSI BOTTOM SHEET YANG DIKEMBALIKAN ---
+  // --- FUNGSI BOTTOM SHEET ---
   void _showReportBottomSheet(
       BuildContext mainScreenContext, LatLng position, String address) {
     XFile? _selectedImageInBottomSheet;
@@ -192,6 +194,7 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                             style: CustomTextStyles.boldXl
                                 .copyWith(color: CustomColors.primary900))),
                     const SizedBox(height: 20),
+                    // ... (UI Form lainnya tidak ada perubahan)
                     Text('Alamat Laporan',
                         style: CustomTextStyles.mediumBase
                             .copyWith(color: CustomColors.secondary400)),
@@ -286,7 +289,8 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 24, vertical: 12),
                                   shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20))),
+                                      borderRadius:
+                                          BorderRadius.circular(20))),
                               onPressed: () async {
                                 final XFile? image = await _picker.pickImage(
                                     source: ImageSource.gallery,
@@ -332,116 +336,109 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                                 onPressed: _isSendingReport
                                     ? null
                                     : () async {
-                                        if (_selectedImageInBottomSheet ==
-                                            null) {
-                                          if (!mainScreenContext.mounted)
-                                            return;
-                                          ScaffoldMessenger.of(
-                                                  mainScreenContext)
+                                        // Validasi gambar
+                                        if (_selectedImageInBottomSheet == null) {
+                                          if (!mainScreenContext.mounted) return;
+                                          ScaffoldMessenger.of(mainScreenContext)
                                               .showSnackBar(SnackBar(
                                                   content: const Text(
                                                       'Mohon pilih gambar bukti terlebih dahulu!'),
-                                                  backgroundColor:
-                                                      Colors.orange));
+                                                  backgroundColor: Colors.orange));
                                           return;
                                         }
-                                        setStateBottomSheet(
-                                            () => _isSendingReport = true);
-                                        if (mounted)
-                                          setState(
-                                              () => _isSendingReport = true);
 
-                                        String imageUrlForBackend =
-                                            "https://via.placeholder.com/300.png?text=BuktiLaporan";
-                                        // TODO: Implementasi logika upload gambar yang sebenarnya di sini
+                                        setStateBottomSheet(() => _isSendingReport = true);
+                                        if (mounted) setState(() => _isSendingReport = true);
 
+                                        // Cek user session
                                         final SharedPreferences prefs =
-                                            await SharedPreferences
-                                                .getInstance();
-                                        final int? pelaporId =
-                                            prefs.getInt('user_id');
+                                            await SharedPreferences.getInstance();
+                                        final int? pelaporId = prefs.getInt('user_id');
+
                                         if (pelaporId == null) {
                                           if (!mounted) return;
-                                          ScaffoldMessenger.of(
-                                                  mainScreenContext)
+                                          ScaffoldMessenger.of(mainScreenContext)
                                               .showSnackBar(const SnackBar(
                                                   content: Text(
                                                       'Sesi pengguna tidak valid. Mohon login ulang.'),
                                                   backgroundColor: Colors.red));
-                                          setStateBottomSheet(
-                                              () => _isSendingReport = false);
-                                          if (mounted)
-                                            setState(
-                                                () => _isSendingReport = false);
+                                          setStateBottomSheet(() => _isSendingReport = false);
+                                          if (mounted) setState(() => _isSendingReport = false);
                                           return;
                                         }
 
-                                        Map<String, dynamic> reportData = {
-                                          "alamat": address,
-                                          "koordinatLatitude":
-                                              position.latitude,
-                                          "koordinatLongitude":
-                                              position.longitude,
-                                          "description":
-                                              _descriptionController.text,
-                                          "imageUrl": imageUrlForBackend,
-                                          "pelaporId": pelaporId
-                                        };
+                                        // ======================================================
+                                        // ===== AWAL PERUBAHAN: LOGIKA UPLOAD MULTIPART/FORM-DATA =====
+                                        // ======================================================
 
-                                        const String apiUrl =
-                                            'https://broadly-neutral-osprey.ngrok-free.app/api/laporan'; // GANTI DENGAN URL API ANDA
+                                        const String apiUrl = 'https://broadly-neutral-osprey.ngrok-free.app/api/laporan'; // GANTI DENGAN URL API ANDA
 
-                                        try {
-                                          final response = await http.post(
-                                              Uri.parse(apiUrl),
-                                              headers: {
-                                                'Content-Type':
-                                                    'application/json; charset=UTF-8'
-                                              },
-                                              body: jsonEncode(reportData));
-                                          if (!mainScreenContext.mounted)
-                                            return;
-                                          final Map<String, dynamic>
-                                              responseData =
-                                              jsonDecode(response.body);
+                                        // Di dalam onPressed tombol "Kirim Laporan"
 
-                                          if (response.statusCode == 201 &&
-                                              responseData['success'] == true) {
-                                            Navigator.of(builderContext).pop();
-                                            ScaffoldMessenger.of(
-                                                    mainScreenContext)
-                                                .showSnackBar(SnackBar(
-                                                    content: Text(responseData[
-                                                            'message'] ??
-                                                        'Laporan berhasil dikirim!'),
-                                                    backgroundColor:
-                                                        Colors.green));
-                                          } else {
-                                            ScaffoldMessenger.of(
-                                                    mainScreenContext)
-                                                .showSnackBar(SnackBar(
-                                                    content: Text(responseData[
-                                                            'error'] ??
-                                                        'Gagal mengirim laporan. Status: ${response.statusCode}'),
-                                                    backgroundColor:
-                                                        Colors.red));
-                                          }
-                                        } catch (e) {
-                                          if (!mainScreenContext.mounted)
-                                            return;
-                                          ScaffoldMessenger.of(
-                                                  mainScreenContext)
-                                              .showSnackBar(SnackBar(
-                                                  content: Text(
-                                                      'Terjadi kesalahan jaringan: ${e.toString()}'),
-                                                  backgroundColor: Colors.red));
-                                        } finally {
-                                          setStateBottomSheet(
-                                              () => _isSendingReport = false);
-                                          if (mounted)
-                                            setState(
-                                                () => _isSendingReport = false);
-                                        }
+try {
+  const String apiUrl = 'https://broadly-neutral-osprey.ngrok-free.app/api/laporan';
+  var request = http.MultipartRequest('POST', Uri.parse(apiUrl));
+
+  // Data teks tetap sama
+  request.fields['alamat'] = address;
+  request.fields['koordinatLatitude'] = position.latitude.toString();
+  request.fields['koordinatLongitude'] = position.longitude.toString();
+  request.fields['description'] = _descriptionController.text;
+  request.fields['pelaporId'] = pelaporId.toString();
+
+  // ===== AWAL PERUBAHAN =====
+
+  // 1. Dapatkan path file
+  final String filePath = _selectedImageInBottomSheet!.path;
+
+  // 2. Dapatkan Tipe MIME dari path file menggunakan paket 'mime'
+  // Jika tidak terdeteksi, gunakan 'application/octet-stream' sebagai cadangan
+  final String? mimeType = lookupMimeType(filePath);
+  final mediaType = MediaType.parse(mimeType ?? 'application/octet-stream');
+
+  // 3. Tambahkan file beserta Tipe MIME yang sudah benar
+  request.files.add(
+    await http.MultipartFile.fromPath(
+      'imageUrl',
+      filePath,
+      contentType: mediaType, // <-- TAMBAHKAN contentType SECARA EKSPLISIT
+    )
+  );
+
+  // ===== AKHIR PERUBAHAN =====
+
+  final streamedResponse = await request.send();
+  final response = await http.Response.fromStream(streamedResponse);
+
+  if (!mainScreenContext.mounted) return;
+
+  final Map<String, dynamic> responseData = jsonDecode(response.body);
+
+  if (response.statusCode == 201 && responseData['success'] == true) {
+    Navigator.of(builderContext).pop();
+    ScaffoldMessenger.of(mainScreenContext).showSnackBar(SnackBar(
+      content: Text(responseData['message'] ?? 'Laporan berhasil dikirim!'),
+      backgroundColor: Colors.green
+    ));
+  } else {
+    ScaffoldMessenger.of(mainScreenContext).showSnackBar(SnackBar(
+      content: Text(responseData['error'] ?? 'Gagal mengirim laporan. Status: ${response.statusCode}'),
+      backgroundColor: Colors.red
+    ));
+  }
+} catch (e) {
+  if (!mainScreenContext.mounted) return;
+  ScaffoldMessenger.of(mainScreenContext).showSnackBar(SnackBar(
+    content: Text('Terjadi kesalahan jaringan: ${e.toString()}'),
+    backgroundColor: Colors.red
+  ));
+} finally {
+  setStateBottomSheet(() => _isSendingReport = false);
+  if (mounted) setState(() => _isSendingReport = false);
+}
+                                        // ====================================================
+                                        // ===== AKHIR PERUBAHAN: LOGIKA UPLOAD =====
+                                        // ====================================================
                                       },
                                 child: _isSendingReport
                                     ? const SizedBox(
@@ -466,6 +463,7 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // --- UI Build Method (TIDAK ADA PERUBAHAN) ---
     const double navigationBarHeight = 70.0;
     final double navBarClearance = navigationBarHeight + _fabBottomPadding;
     const double reportButtonHeight = 50.0;
@@ -547,7 +545,8 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                                   ? Text('Memuat alamat...',
                                       style: CustomTextStyles.regularXs
                                           .copyWith(
-                                              color: CustomColors.secondary300))
+                                              color:
+                                                  CustomColors.secondary300))
                                   : Text(_currentAddress,
                                       style: CustomTextStyles.regularXs
                                           .copyWith(
@@ -581,7 +580,6 @@ class _LaporkanScreenState extends State<LaporkanScreen> {
                         _currentPosition == null)
                     ? null
                     : () {
-                        // --- PEMANGGILAN BOTTOM SHEET YANG BENAR ---
                         _showReportBottomSheet(
                             context, _currentPosition!, _currentAddress);
                       },
